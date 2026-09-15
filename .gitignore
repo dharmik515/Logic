@@ -1,0 +1,20 @@
+# Runtime data - reports, photos, PINs. Never commit this.
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Secrets
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db

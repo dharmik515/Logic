@@ -1,0 +1,16 @@
+# Pinned light theme so the custom CSS and Streamlit's own widgets always agree.
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#f4f6fb"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0b1020"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = false
+
+[server]
+maxUploadSize = 15
+enableXsrfProtection = true

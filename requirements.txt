@@ -1,0 +1,8 @@
+# Streamlit 1.49+ is required: the app uses the width="stretch" layout API and
+# st.pills / st.segmented_control.
+streamlit>=1.49
+pillow>=10.0
+pandas>=2.0
+altair>=5.0
+# Timezone database. Needed on Windows, harmless everywhere else.
+tzdata>=2024.1
