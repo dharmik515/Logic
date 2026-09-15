@@ -1,10 +1,17 @@
-"""Turn a PIN into a hash you can paste into secrets.
+"""Turn PINs into hashes you can paste into secrets.
 
-    python tools/make_pin_hash.py
+    python tools/make_pin_hash.py            # the admin PIN
+    python tools/make_pin_hash.py --agents   # the whole team
 
-The PIN is typed, never stored, and never echoed. Only the hash is printed -
-paste that into your app's secrets as ADMIN_PIN_HASH and the plain PIN exists
-nowhere but in your head.
+PINs are typed, never echoed, never written to disk. Only the hashes are
+printed. Paste those into your secrets and the PINs themselves exist nowhere
+at all - not in the repository, not in the database, not in secrets, not on
+anyone's screen. Only in the head of whoever chose them.
+
+Note the limit this cannot fix: a 4-6 digit PIN is a small keyspace, so a
+hash of one can still be brute-forced offline by someone who steals your whole
+database. Guard DATABASE_URL accordingly, and prefer a longer admin secret -
+the login field takes up to 10 characters, and letters beat extra digits.
 """
 import getpass
 import os
@@ -12,29 +19,67 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib import security
+from lib import config as C  # noqa: E402
+from lib import security  # noqa: E402
 
 
-def main() -> int:
-    print("Create an admin PIN hash for ADMIN_PIN_HASH")
-    print("(nothing is written to disk; the PIN is not echoed)\n")
+def ask(label, *, digits_only=True):
+    """Prompt twice, echo nothing, return the value or None."""
+    first = getpass.getpass("%s: " % label).strip()
+    if not first:
+        return None
+    if digits_only and (not first.isdigit() or not 4 <= len(first) <= 6):
+        print("   a PIN should be 4 to 6 digits - skipped")
+        return None
+    if first != getpass.getpass("   type it again: ").strip():
+        print("   they did not match - skipped")
+        return None
+    return first
 
-    first = getpass.getpass("PIN (4-6 digits): ").strip()
+
+def admin() -> int:
+    print("Admin secret -> ADMIN_PIN_HASH")
+    print("Up to 10 characters. Letters make it far stronger than extra digits.\n")
+
+    first = getpass.getpass("Admin PIN or passphrase: ").strip()
     if not first:
         print("Nothing entered.")
-        return 1
-    if not first.isdigit() or not 4 <= len(first) <= 6:
-        print("A PIN should be 4 to 6 digits.")
         return 1
     if first != getpass.getpass("Type it again: ").strip():
         print("They did not match.")
         return 1
 
-    print("\nPaste this line into your secrets:\n")
+    print("\nPaste this into your secrets, and delete any ADMIN_PIN line:\n")
     print('ADMIN_PIN_HASH = "{}"\n'.format(security.hash_pin(first)))
-    print("Then remove any ADMIN_PIN line - it is no longer needed.")
+    return 0
+
+
+def agents() -> int:
+    roster = C.default_agents()
+    if not roster:
+        print("No roster configured. Set AGENTS first, or add the team in the app.")
+        return 1
+
+    print("Agent PINs -> AGENT_PINS")
+    print("4 to 6 digits each. Press Enter to skip anyone and leave them")
+    print("with the random PIN the app already gave them.\n")
+
+    pairs = []
+    for name in roster:
+        pin = ask("  %-10s" % name)
+        if pin:
+            pairs.append("{}:{}".format(name, security.hash_pin(pin)))
+
+    if not pairs:
+        print("\nNothing entered.")
+        return 1
+
+    print("\nPaste this single line into your secrets:\n")
+    print('AGENT_PINS = "{}"\n'.format(", ".join(pairs)))
+    print("Those are hashes, so the PINs themselves are now only in your head -")
+    print("write them down for the team before you close this window.")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(agents() if "--agents" in sys.argv else admin())

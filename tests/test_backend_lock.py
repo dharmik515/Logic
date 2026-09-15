@@ -83,5 +83,32 @@ for secret in ("111111", "222222", "333333", "777777", "22446688"):
     assert secret not in screen, "%r is visible on screen" % secret
 print("OK  the dashboard shows no add/remove/save controls and no PINs")
 
+# --- and the strongest form: secrets hold hashes, not PINs ---------------
+A, B = "444444", "555555"
+os.environ["AGENT_PINS"] = "Alpha:{}, Bravo:{}".format(
+    security.hash_pin(A), security.hash_pin(B))
+os.environ["ADMIN_PIN_HASH"] = security.hash_pin("224466-gate")
+os.environ.pop("ADMIN_PIN", None)
+get_store().set_config("loginattempts", {})
+
+auth.load_pins()
+assert auth.check_agent("Alpha", A) and auth.check_agent("Bravo", B)
+assert not auth.check_agent("Alpha", B)
+assert auth.check_admin("224466-gate") and not auth.check_admin("22446688")
+print("OK  logins work when secrets carry hashes instead of PINs")
+
+blob = os.environ["AGENT_PINS"] + os.environ["ADMIN_PIN_HASH"] + str(
+    get_store().get_config("agentpins"))
+for secret in (A, B, "224466-gate"):
+    assert secret not in blob, "%r is readable in secrets or the database" % secret
+print("OK  neither secrets nor the database holds a usable PIN")
+
+# a hash must be stored verbatim - re-hashing one would lock everybody out
+stored = get_store().get_config("agentpins")["Alpha"]
+auth.load_pins(); auth.load_pins()
+assert get_store().get_config("agentpins")["Alpha"] == stored
+assert auth.check_agent("Alpha", A), "a supplied hash got re-hashed"
+print("OK  supplied hashes are stored verbatim and survive restarts")
+
 print()
 print("*** BACKEND LOCK VERIFIED ***")

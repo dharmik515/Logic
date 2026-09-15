@@ -126,7 +126,16 @@ def load_pins() -> Dict[str, str]:
         # the salt would differ every run and churn the database.
         for a in load_agents():
             want = per_agent.get(a) or default
-            if want and not security.verify_pin(want, pins.get(a, "")):
+            if not want:
+                continue
+            if security.is_hash(want):
+                # Already a hash, so the PIN itself is nowhere - not even in
+                # secrets. Store it verbatim; re-hashing a hash would lock
+                # everybody out.
+                if pins.get(a) != want:
+                    pins[a] = want
+                    changed = True
+            elif not security.verify_pin(want, pins.get(a, "")):
                 pins[a] = security.hash_pin(want)
                 changed = True
         if changed:
@@ -139,7 +148,9 @@ def load_pins() -> Dict[str, str]:
             # AGENT_PIN, then a random one. Never a value from this source
             # file - the repository is public, so a PIN in it is published.
             pin = per_agent.get(a) or default or C.random_pin()
-            pins[a] = security.hash_pin(pin)
+            # A hash may be supplied directly, so the PIN need not exist in
+            # secrets either - see tools/make_pin_hash.py.
+            pins[a] = pin if security.is_hash(pin) else security.hash_pin(pin)
             changed = True
     if changed:
         store.set_config(PINS_KEY, pins)

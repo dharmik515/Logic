@@ -387,7 +387,7 @@ with.
 | The repo is public | No PIN in the source; the app fails closed without `ADMIN_PIN` |
 | A database dump | Only hashes are stored — the PINs are not recoverable |
 | The admin's screen | The Team panel shows no PINs; a new one is shown once, as it is typed |
-| The secrets store | `ADMIN_PIN_HASH` means even that holds only a hash |
+| The secrets store | `ADMIN_PIN_HASH` and hashed `AGENT_PINS` mean even that holds only hashes |
 | Guessing a PIN online | 5 wrong tries locks that name out for 15 minutes |
 | Someone at the admin screen | `LOCK_PIN_CHANGES = true` — PINs and roster come only from secrets |
 
@@ -396,6 +396,24 @@ agent's PIN back to them**, because nobody can. The forgot-PIN flow covers it �
 the agent picks the new PIN they want, and the admin approves the request
 without ever seeing it. If someone is simply stuck, the admin sets them a new
 PIN and reads it off the screen as they type it.
+
+### Keeping the PINs nowhere at all
+
+Both PIN settings accept a **hash** instead of the PIN. Generate them once, on
+your own machine:
+
+```bash
+python tools/make_pin_hash.py            # -> ADMIN_PIN_HASH
+python tools/make_pin_hash.py --agents   # -> AGENT_PINS, hashed
+```
+
+Neither prompt echoes anything or writes to disk. Paste the two lines into
+secrets and the PINs exist in no file anywhere — not the repository, not the
+secrets store, not the database, not the screen. Only in the heads of the
+people who use them.
+
+This is the setup to pair with `LOCK_PIN_CHANGES`, which needs `AGENT_PINS` to
+stay in secrets permanently; hashed values make that harmless.
 
 ### Locking the team to the backend
 

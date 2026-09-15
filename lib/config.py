@@ -53,8 +53,13 @@ def agent_pins():
 
         AGENT_PINS = "Sultan:4821, Ifham:7390"
 
-    Anything not listed gets a random PIN the admin can read off the Team
-    panel. No PIN belongs in this file - the repository is public.
+    A value may be a PIN or, better, an already-computed hash:
+
+        AGENT_PINS = "Sultan:pbkdf2_sha256$120000$...."
+
+    With hashes the PIN exists nowhere at all - not in this file, not in the
+    database, not even in secrets. Generate them with tools/make_pin_hash.py.
+    Anyone not listed gets a random PIN instead.
     """
     out = {}
     for pair in _csv_secret("AGENT_PINS"):
