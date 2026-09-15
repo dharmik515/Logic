@@ -138,6 +138,18 @@ def default_agent_pin():
     return pin or None
 
 
+def pins_locked() -> bool:
+    """LOCK_PIN_CHANGES = true -> PINs and the roster are owned by the backend.
+
+    The dashboard then offers no way to add, remove or re-PIN anybody: those
+    come from AGENTS / AGENT_PINS and are re-applied on every load, so editing
+    secrets and rebooting is the only route. Nothing about the team can be
+    changed by whoever happens to be sitting in front of the admin screen.
+    """
+    raw = _secret("LOCK_PIN_CHANGES", "")
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
 def random_pin() -> str:
     """A 6-digit PIN the admin can read off the Team panel and pass on."""
     import secrets

@@ -40,6 +40,17 @@ else:  # older Streamlit - fall back to rendering inline
 def _pins_panel() -> None:
     reqs = auth.load_requests()
     pins = auth.load_pins()
+    locked = C.pins_locked()
+
+    if locked:
+        ui.note(
+            "🔒 The team and their PINs are locked to the backend. They come from "
+            "AGENTS and AGENT_PINS in this app's secrets and are re-applied on "
+            "every start, so nothing here can change them - not from this screen, "
+            "and not by anyone who reaches it.",
+            "info",
+        )
+        ui.spacer(10)
 
     if reqs:
         ui.section("🔔", "Pending PIN requests", "Approve to switch the agent to their new PIN.")
@@ -54,12 +65,13 @@ def _pins_panel() -> None:
                     )
                 with c2:
                     if st.button("✅ Approve", key="ap_" + agent, type="primary",
-                                 width="stretch"):
+                                 width="stretch", disabled=locked):
                         ok, msg = auth.approve_request(agent)
                         st.toast(msg, icon="✅" if ok else "⚠️")
                         st.rerun()
                 with c3:
-                    if st.button("✕ Reject", key="rj_" + agent, width="stretch"):
+                    if st.button("✕ Reject", key="rj_" + agent, width="stretch",
+                                 disabled=locked):
                         ok, msg = auth.reject_request(agent)
                         st.toast(msg, icon="🚫")
                         st.rerun()
@@ -68,6 +80,13 @@ def _pins_panel() -> None:
     roster = auth.load_agents()
 
     # ---- add someone new -------------------------------------------------
+    if not locked:
+        _add_agent_form()
+
+    _team_list(roster, pins, locked)
+
+
+def _add_agent_form() -> None:
     ui.section("➕", "Add an agent", "They can log in as soon as you add them.")
     with st.container(border=True):
         c1, c2, c3 = st.columns([1.5, 1, 0.9])
@@ -93,14 +112,22 @@ def _pins_panel() -> None:
                     st.rerun()
                 st.error(msg)
 
-    # ---- the team --------------------------------------------------------
+def _team_list(roster, pins, locked: bool) -> None:
     ui.section("🔑", "The team",
-               "{} agents. PINs are stored hashed, so none can be shown here - "
-               "set a new one if somebody is locked out.".format(len(roster)))
+               ("{} agents. PINs come from the backend and cannot be changed here."
+                if locked else
+                "{} agents. PINs are stored hashed, so none can be shown here - "
+                "set a new one if somebody is locked out.").format(len(roster)))
     pending_removal = st.session_state.get("confirm_remove")
 
     for agent in roster:
         with st.container(border=True):
+            if locked:
+                st.markdown("**{}**  {}".format(
+                    ui.e(agent), ui.pill("PIN set in secrets", "flat")),
+                    unsafe_allow_html=True)
+                continue
+
             c1, c2, c3, c4 = st.columns([1.3, 1.1, 0.8, 0.8])
             with c1:
                 st.markdown("<div style='padding-top:30px;font-weight:700'>{}</div>".format(

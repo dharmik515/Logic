@@ -1,9 +1,13 @@
 """Login, per-agent PINs, and the admin-approved forgot-PIN flow.
 
-PINs are stored in plain text on purpose: the admin has to be able to read an
-agent's PIN back to them over the phone, which is the whole point of the
-"forgot my PIN" workflow here. This is light gating for a field log shared over
-WhatsApp - it is not authentication. See README, Security.
+No PIN is ever stored. Everything written here is a salted PBKDF2 hash (see
+lib/security.py), so a leaked database yields nothing anyone can log in with,
+and the admin cannot read a PIN back to an agent - nobody can. Failed logins
+are counted and lock a name out, which is what actually defeats guessing at
+this PIN length.
+
+With LOCK_PIN_CHANGES set, the roster and the PINs belong to the backend: this
+module refuses every write and re-applies what the secrets say instead.
 """
 from __future__ import annotations
 
@@ -54,6 +58,8 @@ def save_agents(roster: List[str]) -> None:
 
 def add_agent(name: str, pin: str) -> Tuple[bool, str]:
     """Add a person to the team, with their starting PIN."""
+    if C.pins_locked():
+        return False, "The roster is locked to the backend. Edit AGENTS in the app's secrets and reboot."
     name = " ".join(str(name or "").split())
     pin = str(pin or "").strip()
     if not NAME_RE.match(name):
@@ -69,7 +75,7 @@ def add_agent(name: str, pin: str) -> Tuple[bool, str]:
     save_agents(roster)
 
     pins = load_pins()
-    pins[name] = pin
+    pins[name] = security.hash_pin(pin)      # never the PIN itself
     get_store().set_config(PINS_KEY, pins)
     return True, "{} added. They can log in with PIN {}.".format(name, pin)
 
@@ -81,6 +87,8 @@ def remove_agent(name: str) -> Tuple[bool, str]:
     30-day record and still show on the dashboard for days already filed.
     Only the ability to log in goes away.
     """
+    if C.pins_locked():
+        return False, "The roster is locked to the backend. Edit AGENTS in the app's secrets and reboot."
     roster = load_agents()
     if name not in roster:
         return False, "{} is not on the team.".format(name)
@@ -110,6 +118,21 @@ def load_pins() -> Dict[str, str]:
     changed = False
     default = C.default_agent_pin()
     per_agent = C.agent_pins()          # AGENT_PINS = "Sultan:4821, Ifham:7390"
+
+    if C.pins_locked():
+        # Backend owns the PINs: re-apply what secrets say on every load, so a
+        # change there takes effect on reboot and nothing set through the UI
+        # can survive. Only re-hash when the PIN actually changed, otherwise
+        # the salt would differ every run and churn the database.
+        for a in load_agents():
+            want = per_agent.get(a) or default
+            if want and not security.verify_pin(want, pins.get(a, "")):
+                pins[a] = security.hash_pin(want)
+                changed = True
+        if changed:
+            store.set_config(PINS_KEY, pins)
+        return pins
+
     for a in load_agents():
         if not pins.get(a):
             # Order: the PIN set for this agent in secrets, then a shared
@@ -201,6 +224,8 @@ def check_agent(agent: str, pin: str) -> bool:
 # --------------------------------------------------------------- admin ops --
 def set_pin(agent: str, pin: str) -> Tuple[bool, str]:
     """Admin sets a PIN directly. Also clears any pending request for them."""
+    if C.pins_locked():
+        return False, "PIN changes are locked to the backend. Edit AGENT_PINS in the app's secrets and reboot."
     pin = str(pin or "").strip()
     if agent not in load_agents():
         return False, "Unknown agent."
@@ -221,6 +246,8 @@ def set_pin(agent: str, pin: str) -> Tuple[bool, str]:
 
 
 def approve_request(agent: str) -> Tuple[bool, str]:
+    if C.pins_locked():
+        return False, "PIN changes are locked to the backend - update AGENT_PINS in secrets."
     reqs = load_requests()
     req = reqs.get(agent)
     if not req:

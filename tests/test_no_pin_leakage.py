@@ -65,6 +65,15 @@ assert auth.check_agent("Sultan", "4821"), "the hash does not verify the real PI
 assert not auth.check_agent("Sultan", "4822")
 print("OK  hashes still verify the right PIN and reject the wrong one")
 
+# ---- 2b. an agent added from the dashboard is hashed too ----------------
+ok, _ = auth.add_agent("Zephyr", "9182")
+assert ok
+added = get_store().get_config("agentpins")["Zephyr"]
+assert security.is_hash(added), "add_agent stored the PIN in the clear: %r" % added
+assert "9182" not in json.dumps(get_store().get_config("agentpins"))
+assert auth.check_agent("Zephyr", "9182")
+print("OK  an agent added from the dashboard is stored hashed as well")
+
 # ---- 3. a reset request never exposes the chosen PIN --------------------
 ok, _ = auth.request_reset("Athar", "5150")
 assert ok

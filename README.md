@@ -388,7 +388,8 @@ with.
 | A database dump | Only hashes are stored — the PINs are not recoverable |
 | The admin's screen | The Team panel shows no PINs; a new one is shown once, as it is typed |
 | The secrets store | `ADMIN_PIN_HASH` means even that holds only a hash |
-| Guessing a 4-digit PIN | 5 wrong tries locks that name out for 15 minutes |
+| Guessing a PIN online | 5 wrong tries locks that name out for 15 minutes |
+| Someone at the admin screen | `LOCK_PIN_CHANGES = true` — PINs and roster come only from secrets |
 
 The cost of this is honest and worth stating: **the admin can no longer read an
 agent's PIN back to them**, because nobody can. The forgot-PIN flow covers it —
@@ -396,10 +397,36 @@ the agent picks the new PIN they want, and the admin approves the request
 without ever seeing it. If someone is simply stuck, the admin sets them a new
 PIN and reads it off the screen as they type it.
 
+### Locking the team to the backend
+
+`LOCK_PIN_CHANGES = true` makes `AGENTS` and `AGENT_PINS` the only way to change
+who is on the team and what their PINs are. They are re-applied on every start,
+and the dashboard offers no add, remove or set-PIN control at all — so whoever
+reaches the admin screen cannot alter anybody's access, only read reports.
+
+Fill in `AGENT_PINS` for everyone *before* turning it on: an agent with no PIN
+listed then has no route to getting one.
+
+### How long would an attacker need?
+
+Measured on this codebase, against a PBKDF2 hash at 120,000 iterations:
+
+| Admin secret | Guessing via the login form | If the whole database leaks |
+|---|---|---|
+| 4 digits | ~10 days | seconds on a GPU |
+| 6 digits | ~3 years | ~9 seconds on a GPU |
+| 8 digits | ~285 years | **~15 minutes** on a GPU |
+| 10 chars, letters + digits | longer than the universe | ~1,000 GPU-years |
+
+The lockout makes any of these safe against someone poking at your login page.
+Only the last row is safe against someone who has stolen your database — which
+is why the admin field accepts up to 10 characters, and why a passphrase beats
+a longer number. Digits alone are a small keyspace no matter how many you use.
+
 Remaining limits, stated plainly:
 
-* A PIN is still only 4–6 digits. The lockout is what makes that safe, not the
-  hash; both matter.
+* Agent PINs are 4–6 digits because agents type them on a phone twice a day.
+  That is a deliberate usability trade; the lockout is what protects them.
 * Anyone with the link and a valid PIN can file a report. This is a field log,
   not a bank.
 * One shared admin credential means no individual accountability — you cannot
