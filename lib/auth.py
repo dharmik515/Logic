@@ -8,9 +8,11 @@ WhatsApp - it is not authentication. See README, Security.
 from __future__ import annotations
 
 import re
+import time
 from typing import Any, Dict, List, Tuple
 
 from . import config as C
+from . import security
 from .storage import get_store
 
 PIN_RE = re.compile(r"^\d{4,6}$")
@@ -18,6 +20,7 @@ PIN_RE = re.compile(r"^\d{4,6}$")
 PINS_KEY = "agentpins"
 REQS_KEY = "resetrequests"
 ROSTER_KEY = "roster"
+ATTEMPTS_KEY = "loginattempts"
 
 # A name is used as a record key, so keep it plain and bounded.
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z .'-]{1,29}$")
@@ -106,7 +109,8 @@ def load_pins() -> Dict[str, str]:
             # Order: the PIN set for this agent in secrets, then a shared
             # AGENT_PIN, then a random one. Never a value from this source
             # file - the repository is public, so a PIN in it is published.
-            pins[a] = per_agent.get(a) or default or C.random_pin()
+            pin = per_agent.get(a) or default or C.random_pin()
+            pins[a] = security.hash_pin(pin)
             changed = True
     if changed:
         store.set_config(PINS_KEY, pins)
@@ -123,22 +127,69 @@ def save_requests(reqs: Dict[str, Dict[str, Any]]) -> None:
 
 
 # ------------------------------------------------------------------- login --
-def check_admin(pin: str) -> bool:
-    """Fail closed: with no ADMIN_PIN configured, nothing opens the dashboard.
+def _attempts() -> Dict[str, Any]:
+    rec = get_store().get_config(ATTEMPTS_KEY) or {}
+    return rec if isinstance(rec, dict) else {}
 
-    Note the `configured is None` guard - without it an unset PIN would compare
+
+def locked_out(who: str) -> Tuple[bool, int]:
+    """(locked, seconds left) - a short lockout is what actually defeats
+    guessing, since a 4-digit PIN is only 10,000 possibilities."""
+    return security.too_many_attempts(_attempts().get(who), time.time())
+
+
+def _record_failure(who: str) -> None:
+    all_rec = _attempts()
+    all_rec[who] = security.register_failure(all_rec.get(who), time.time())
+    get_store().set_config(ATTEMPTS_KEY, all_rec)
+
+
+def _record_success(who: str) -> None:
+    all_rec = _attempts()
+    if all_rec.pop(who, None) is not None:
+        get_store().set_config(ATTEMPTS_KEY, all_rec)
+
+
+def check_admin(pin: str) -> bool:
+    """Fail closed: with nothing configured, nothing opens the dashboard.
+
+    Note the `is None` guard - without it an unconfigured PIN would compare
     equal to an empty submission and let anyone straight in.
     """
-    configured = C.admin_pin()
-    if configured is None:
+    locked, _ = locked_out("admin")
+    if locked:
         return False
-    return str(pin or "").strip() == str(configured)
+
+    stored = C.admin_secret()
+    if stored is None:
+        return False
+    if security.verify_pin(str(pin or "").strip(), stored):
+        _record_success("admin")
+        return True
+    _record_failure("admin")
+    return False
 
 
 def check_agent(agent: str, pin: str) -> bool:
     if agent not in load_agents():
         return False
-    return str(pin or "").strip() == str(load_pins().get(agent, ""))
+    locked, _ = locked_out(agent)
+    if locked:
+        return False
+
+    pins = load_pins()
+    stored = pins.get(agent, "")
+    if not security.verify_pin(str(pin or "").strip(), stored):
+        _record_failure(agent)
+        return False
+
+    # A database written before hashing existed holds plaintext; quietly
+    # upgrade it now that we have the PIN in hand and know it is correct.
+    if not security.is_hash(stored):
+        pins[agent] = security.hash_pin(str(pin or "").strip())
+        get_store().set_config(PINS_KEY, pins)
+    _record_success(agent)
+    return True
 
 
 # --------------------------------------------------------------- admin ops --
@@ -152,8 +203,9 @@ def set_pin(agent: str, pin: str) -> Tuple[bool, str]:
 
     store = get_store()
     pins = load_pins()
-    pins[agent] = pin
+    pins[agent] = security.hash_pin(pin)
     store.set_config(PINS_KEY, pins)
+    _record_success(agent)          # a deliberate reset clears any lockout
 
     reqs = load_requests()
     if agent in reqs:
@@ -167,8 +219,19 @@ def approve_request(agent: str) -> Tuple[bool, str]:
     req = reqs.get(agent)
     if not req:
         return False, "No pending request."
-    ok, msg = set_pin(agent, str(req.get("requestedPin", "")))
-    return ok, ("Approved - {} can now log in with their new PIN.".format(agent) if ok else msg)
+    # The requested PIN was hashed the moment it was submitted, so approving
+    # moves a hash across - the admin never learns what the agent chose.
+    stored = req.get("requestedPinHash") or ""
+    if not stored:
+        return False, "That request predates this version - ask them to send it again."
+
+    pins = load_pins()
+    pins[agent] = stored
+    get_store().set_config(PINS_KEY, pins)
+    reqs.pop(agent, None)
+    save_requests(reqs)
+    _record_success(agent)
+    return True, "Approved - {} can now log in with the PIN they chose.".format(agent)
 
 
 def reject_request(agent: str) -> Tuple[bool, str]:
@@ -191,7 +254,7 @@ def request_reset(agent: str, requested_pin: str) -> Tuple[bool, str]:
 
     reqs = load_requests()
     reqs[agent] = {
-        "requestedPin": requested_pin,
+        "requestedPinHash": security.hash_pin(requested_pin),
         "at": C.now_iso(),
         "status": "pending",
     }

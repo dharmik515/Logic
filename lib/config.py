@@ -93,15 +93,38 @@ def _secret(key: str, default=None):
 # No PIN is written in this file. A password committed to a public repository
 # is not a password - so there is no fallback, and the app fails closed: until
 # ADMIN_PIN is configured, the dashboard simply cannot be opened by anyone.
-def admin_pin():
-    """The configured admin PIN, or None when nobody has set one."""
+def admin_secret():
+    """What to check an admin login against, or None if nothing is set up.
+
+    Prefer ADMIN_PIN_HASH: then not even the secrets store holds the password,
+    only something derived from it that cannot be reversed. ADMIN_PIN (the
+    plain value) still works for convenience - secrets are not public - but
+    the hash is the stronger option and the dashboard nudges towards it.
+    Generate one with:  python tools/make_pin_hash.py
+    """
+    hashed = _secret("ADMIN_PIN_HASH", None)
+    hashed = str(hashed).strip() if hashed is not None else ""
+    if hashed:
+        return hashed
+
     pin = _secret("ADMIN_PIN", None)
     pin = str(pin).strip() if pin is not None else ""
     return pin or None
 
 
+def admin_pin():
+    """Back-compat alias. Returns whatever admin logins are checked against."""
+    return admin_secret()
+
+
 def admin_configured() -> bool:
-    return admin_pin() is not None
+    return admin_secret() is not None
+
+
+def admin_secret_is_hashed() -> bool:
+    from . import security
+
+    return security.is_hash(admin_secret())
 
 
 def default_agent_pin():

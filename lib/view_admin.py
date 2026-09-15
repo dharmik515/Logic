@@ -81,7 +81,11 @@ def _pins_panel() -> None:
             st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
             if st.button("Add agent", key="add_agent", type="primary", width="stretch"):
                 ok, msg = auth.add_agent(new_name, new_pin)
-                st.toast(msg, icon="✅" if ok else "⚠️")
+                if ok:
+                    st.success(msg + " Note it down - PINs are stored hashed and "
+                               "cannot be shown again.", icon="✅")
+                else:
+                    st.toast(msg, icon="⚠️")
                 if ok:
                     # clear the form for the next one
                     st.session_state.pop("new_agent_name", None)
@@ -90,8 +94,9 @@ def _pins_panel() -> None:
                 st.error(msg)
 
     # ---- the team --------------------------------------------------------
-    ui.section("🔑", "The team", "{} agents. Change a PIN and press Save, or remove someone."
-               .format(len(roster)))
+    ui.section("🔑", "The team",
+               "{} agents. PINs are stored hashed, so none can be shown here - "
+               "set a new one if somebody is locked out.".format(len(roster)))
     pending_removal = st.session_state.get("confirm_remove")
 
     for agent in roster:
@@ -101,15 +106,22 @@ def _pins_panel() -> None:
                 st.markdown("<div style='padding-top:30px;font-weight:700'>{}</div>".format(
                     ui.e(agent)), unsafe_allow_html=True)
             with c2:
-                st.text_input("PIN", value=str(pins.get(agent, "")), key="pin_" + agent,
-                              max_chars=6)
+                st.text_input("Set a new PIN", value="", key="pin_" + agent,
+                              max_chars=6, placeholder="4-6 digits",
+                              help="Type a new PIN and press Save. The existing one "
+                                   "cannot be displayed - it is stored as a hash.")
             with c3:
                 st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
                 if st.button("Save", key="sv_" + agent, width="stretch"):
-                    ok, msg = auth.set_pin(agent, st.session_state.get("pin_" + agent, ""))
-                    st.toast(msg, icon="✅" if ok else "⚠️")
+                    typed = st.session_state.get("pin_" + agent, "")
+                    ok, msg = auth.set_pin(agent, typed)
                     if ok:
-                        st.rerun()
+                        # Shown once, to the person who just typed it, so they
+                        # can pass it on. It is a hash from here on.
+                        st.success("{}'s PIN is now {} - tell them, it cannot be "
+                                   "looked up later.".format(agent, typed), icon="🔑")
+                    else:
+                        st.toast(msg, icon="⚠️")
             with c4:
                 st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
                 if st.button("Remove", key="rm_" + agent, width="stretch"):

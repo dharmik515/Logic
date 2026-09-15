@@ -42,11 +42,12 @@ roster = auth.load_agents()
 assert roster == C.DEFAULT_AGENTS and len(roster) == 11, roster
 print("OK  roster seeds from source:", len(roster), "agents")
 
+from lib import security
 pins = auth.load_pins()
-assert all(p.isdigit() and len(p) == 6 for p in pins.values()), pins
-assert len(set(pins.values())) == len(pins), "agents share a PIN"
-assert "12345" not in pins.values(), "a PIN from the source file was used"
-print("OK  with no AGENT_PIN set, every agent gets their own random 6-digit PIN")
+assert all(security.is_hash(v) for v in pins.values()), pins
+assert len(set(pins.values())) == len(pins), "agents share a stored value"
+assert not any(v.isdigit() for v in pins.values()), "a PIN is stored in the clear"
+print("OK  every agent gets their own random PIN, stored only as a hash")
 
 at = run("login screen lists the team")
 names = [getattr(o, "content", o) for o in at.get("button_group")[1].options]
@@ -82,9 +83,13 @@ os.environ["AGENT_PINS"] = "Nila:4821, Omar:7390"
 from lib.storage import get_store
 get_store().set_config("roster", ["Nila", "Omar"])
 get_store().set_config("agentpins", {})
-pins = auth.load_pins()
-assert pins["Nila"] == "4821" and pins["Omar"] == "7390", pins
-print("OK  AGENT_PINS assigns PINs per agent without putting one in the repo")
+get_store().set_config("loginattempts", {})
+auth.load_pins()
+assert auth.check_agent("Nila", "4821") and auth.check_agent("Omar", "7390")
+assert not auth.check_agent("Nila", "7390")
+stored = get_store().get_config("agentpins")
+assert "4821" not in str(stored), "the configured PIN is readable in the database"
+print("OK  AGENT_PINS sets each PIN, and only its hash is ever stored")
 
 print()
 print("*** FRESH-DEPLOY PATH VERIFIED ***")

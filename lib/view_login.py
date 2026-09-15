@@ -6,6 +6,7 @@ import streamlit as st
 
 from . import auth
 from . import config as C
+from . import security
 from . import ui
 
 
@@ -50,7 +51,11 @@ def _login_agent() -> None:
             st.toast("Welcome back, {}!".format(name), icon="👋")
             st.rerun()
         else:
-            st.error("That PIN does not match. Try again, or use 'Forgot my PIN' below.")
+            locked, left = auth.locked_out(name or "")
+            if locked:
+                st.error(security.describe_lockout(left))
+            else:
+                st.error("That PIN does not match. Try again, or use 'Forgot my PIN' below.")
 
     st.markdown("")
     if st.button("🔑 Forgot my PIN", width="stretch", key="to_forgot"):
@@ -79,7 +84,8 @@ def _login_admin() -> None:
             st.toast("Admin dashboard unlocked", icon="🛡️")
             st.rerun()
         else:
-            st.error("Wrong admin PIN.")
+            locked, left = auth.locked_out("admin")
+            st.error(security.describe_lockout(left) if locked else "Wrong admin PIN.")
 
 
 def _forgot() -> None:

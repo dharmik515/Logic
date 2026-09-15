@@ -127,14 +127,24 @@ create table config (key text primary key, payload jsonb not null);
 ```
 </details>
 
-### 2. Set the PINs — in secrets, never in the repo
+### 2. Set the admin PIN
 
-`ADMIN_PIN` is required: there is no fallback in the source, so the dashboard
-refuses every login until you set one. `AGENT_PINS` gives each agent their own
-(`"Sultan:1111, Ifham:2222"`); anyone you leave out gets a random 6-digit PIN
-that the admin can read off the Team panel and pass on.
+`ADMIN_PIN` is required — there is no fallback in the source, so the dashboard
+refuses every login until you set one.
 
-Never commit these. `.gitignore` already excludes `.streamlit/secrets.toml`.
+For the strongest setup, store a *hash* instead, so not even your secrets hold
+the password:
+
+```bash
+python tools/make_pin_hash.py      # prompts, echoes nothing, prints a hash
+```
+
+Paste the result as `ADMIN_PIN_HASH` and drop the `ADMIN_PIN` line.
+
+**Agent PINs need no configuration at all.** Each agent gets a random one on
+first run; add someone from the dashboard and you see their PIN once, as you
+type it. `AGENT_PINS = "Sultan:1111, Ifham:2222"` is there if you want to
+pre-set them, and can be deleted once the app has started.
 
 ### 3. Check the roster
 
@@ -330,6 +340,7 @@ python tests/test_fresh_deploy.py   # a brand-new deploy: no secrets, no roster
 python tests/test_e2e_browser.py    # real clicks + real camera at 390px (needs Chrome)
 python tests/check_responsive.py    # real browser at 6 widths (needs Chrome)
 python tests/test_postgres.py       # the Postgres backend (skips without DATABASE_URL)
+python tests/test_no_pin_leakage.py # no PIN in the repo, the database or the UI
 ```
 
 `test_end_to_end.py` walks one full journey through real widgets and clicks:
@@ -365,23 +376,37 @@ Each uses its own throwaway SQLite file and never touches `data/reports.db`.
 
 ## Security
 
-Be clear-eyed about what this is:
+**No PIN is stored anywhere, by anyone.** Not in this repository, not in the
+database, not on the admin's screen. What is stored is a salted PBKDF2-SHA256
+hash, which cannot be turned back into the PIN — so a leaked database, a stolen
+`DATABASE_URL` or a photograph of the dashboard yields nothing you could log in
+with.
 
-* PINs are **light gating, not authentication**. The link is shared over
-  WhatsApp; anyone with the link and a PIN can file a report.
-* Agent PINs are stored **in plain text, by design** — the admin has to be able
-  to read one back to an agent over the phone. Tell agents not to reuse a PIN
-  that matters.
-* There is no rate limiting on PIN entry. A 5-digit admin PIN is brute-forceable
-  by a determined attacker; the mitigation is that there is nothing sensitive
-  here beyond operational numbers, which is exactly why the form should stay
-  that way.
-* The app sets no `robots` meta, but Community Cloud apps are not indexed by
-  default. Do not post the link publicly.
+| Exposure | What protects it |
+|---|---|
+| The repo is public | No PIN in the source; the app fails closed without `ADMIN_PIN` |
+| A database dump | Only hashes are stored — the PINs are not recoverable |
+| The admin's screen | The Team panel shows no PINs; a new one is shown once, as it is typed |
+| The secrets store | `ADMIN_PIN_HASH` means even that holds only a hash |
+| Guessing a 4-digit PIN | 5 wrong tries locks that name out for 15 minutes |
 
-If you later need real security: hash the PINs (`bcrypt`), add an attempt
-counter keyed by agent in the `config` table, and put the admin behind proper
-SSO. The storage interface would not have to change.
+The cost of this is honest and worth stating: **the admin can no longer read an
+agent's PIN back to them**, because nobody can. The forgot-PIN flow covers it —
+the agent picks the new PIN they want, and the admin approves the request
+without ever seeing it. If someone is simply stuck, the admin sets them a new
+PIN and reads it off the screen as they type it.
+
+Remaining limits, stated plainly:
+
+* A PIN is still only 4–6 digits. The lockout is what makes that safe, not the
+  hash; both matter.
+* Anyone with the link and a valid PIN can file a report. This is a field log,
+  not a bank.
+* One shared admin credential means no individual accountability — you cannot
+  tell *which* manager viewed a photo. Proper SSO would fix that; the storage
+  interface would not have to change.
+* Community Cloud apps are not indexed by default, but do not post the link
+  publicly.
 
 ---
 
