@@ -81,7 +81,7 @@ sends the request. **Nothing changes until the admin approves it** in
 
 Ordered by how much it matters.
 
-### 1. Set up persistent storage — required before real use
+### 1. Give it a real database — required before real use
 
 Out of the box the app writes to a local SQLite file (`data/reports.db`). That is
 perfect on a laptop or a VM, **but Streamlit Community Cloud wipes the container
@@ -89,28 +89,43 @@ disk whenever the app sleeps, reboots or is redeployed** — you would lose the
 month's reports and every photo. The admin dashboard shows a warning banner
 whenever the app is running this way.
 
-Free fix, about five minutes:
+**The fix takes about three minutes and costs nothing:**
 
-1. Create a project at [supabase.com](https://supabase.com).
-2. In the Supabase **SQL editor**, run:
+1. Create a free Postgres — [Neon](https://neon.tech),
+   [Supabase](https://supabase.com) or [Railway](https://railway.app) all work.
+2. Copy the connection string it gives you. It looks like
+   `postgresql://user:password@host/dbname?sslmode=require`.
+3. Paste it into the app's secrets as `DATABASE_URL` and reboot.
 
-   ```sql
-   create table entries (
-     date text not null, agent text not null, payload jsonb not null,
-     primary key (date, agent));
-   create table photos (
-     date text not null, agent text not null, which text not null,
-     payload text not null, primary key (date, agent, which));
-   create table config (key text primary key, payload jsonb not null);
-   ```
-3. Copy **Project URL** and the **service_role** key from
-   *Project Settings → API*.
-4. Put them in the app's secrets (below). The app switches to Supabase
-   automatically on the next start and the warning banner disappears.
+That is the whole setup — **the app creates its own tables on first connect**, so
+there is no SQL to run by hand. The warning banner disappears once it is live,
+and the dashboard header tells you which backend is in use.
 
-> The service_role key bypasses row-level security, so it must live only in
-> Streamlit secrets — never in the repo. `.gitignore` already excludes
-> `.streamlit/secrets.toml`.
+A free tier is far more than this app needs: photos are ~100–250 KB each and
+only 30 days are ever kept, so a full team of 11 sits comfortably inside a
+500 MB allowance.
+
+> The connection string is a credential — it belongs only in Streamlit secrets,
+> never in the repo. `.gitignore` already excludes `.streamlit/secrets.toml`.
+
+<details>
+<summary>Using Supabase's REST API instead of a direct connection</summary>
+
+If your network blocks direct Postgres connections, the app can talk to
+Supabase over HTTPS instead. Set `SUPABASE_URL` and `SUPABASE_KEY`
+(service_role) rather than `DATABASE_URL`, and create the tables yourself in
+the Supabase SQL editor:
+
+```sql
+create table entries (
+  date text not null, agent text not null, payload jsonb not null,
+  primary key (date, agent));
+create table photos (
+  date text not null, agent text not null, which text not null,
+  payload text not null, primary key (date, agent, which));
+create table config (key text primary key, payload jsonb not null);
+```
+</details>
 
 ### 2. Change the admin PIN
 
@@ -166,8 +181,7 @@ organisation has a DPO, route the hosting region past them before rollout.
    AGENT_PIN = "seed-pin-for-new-agents"
    APP_TIMEZONE = "Asia/Kolkata"
 
-   SUPABASE_URL = "https://xxxxxxxx.supabase.co"
-   SUPABASE_KEY = "your-service-role-key"
+   DATABASE_URL = "postgresql://user:password@host/dbname?sslmode=require"
    ```
 4. Reboot the app, then share the URL with the team.
 
@@ -191,8 +205,9 @@ built-in default**, so nothing has to be edited in code.
 | `AGENTS` | Seed roster, comma separated, e.g. `"Asha, Ravi"` | empty |
 | `QUICK_REMARKS` | Quick-pick labels on differential rows | empty |
 | `APP_TIMEZONE` | Decides when "today" rolls over | `Asia/Kolkata` |
-| `SUPABASE_URL` / `SUPABASE_KEY` | Switches storage to Supabase | unset (SQLite) |
-| `SQLITE_PATH` | Where the SQLite file lives | `data/reports.db` |
+| `DATABASE_URL` | Postgres connection string — **the recommended storage** | unset (SQLite) |
+| `SUPABASE_URL` / `SUPABASE_KEY` | Supabase over REST, as an alternative | unset |
+| `SQLITE_PATH` | Where the local SQLite file lives | `data/reports.db` |
 
 `.streamlit/secrets.toml.example` is a copy-paste starting point.
 
@@ -256,6 +271,9 @@ tests/                  see below
 
 ### Data model
 
+Three backends sit behind one interface — SQLite (local), Postgres
+(`DATABASE_URL`) and Supabase-over-REST — all storing the same three tables:
+
 | Table | Key | Value |
 |---|---|---|
 | `entries` | `(date, agent)` | the day record, as JSON |
@@ -307,6 +325,7 @@ python tests/test_end_to_end.py     # the whole journey, admin onboard -> offboa
 python tests/test_fresh_deploy.py   # a brand-new deploy: no secrets, no roster
 python tests/test_e2e_browser.py    # real clicks + real camera at 390px (needs Chrome)
 python tests/check_responsive.py    # real browser at 6 widths (needs Chrome)
+python tests/test_postgres.py       # the Postgres backend (skips without DATABASE_URL)
 ```
 
 `test_end_to_end.py` walks one full journey through real widgets and clicks:

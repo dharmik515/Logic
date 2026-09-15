@@ -81,10 +81,12 @@ def storage_warning() -> None:
     if getattr(store, "persistent_on_cloud", False):
         return
     st.warning(
-        "**Storage: SQLite (local file).** Fine on this machine, but on Streamlit "
-        "Community Cloud the disk is wiped when the app sleeps or redeploys. "
-        "Add SUPABASE_URL and SUPABASE_KEY in app secrets to keep data for real - "
-        "see README.",
+        "**Storage: SQLite (a local file).** Fine on this machine, but on "
+        "Streamlit Community Cloud the disk is wiped whenever the app sleeps or "
+        "redeploys - you would lose the month's reports and photos. Create a "
+        "free Postgres (Neon, Supabase, Railway), put its connection string in "
+        "app secrets as `DATABASE_URL`, and reboot. The app creates its own "
+        "tables - there is no SQL to run.",
         icon="⚠️",
     )
 

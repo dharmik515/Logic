@@ -9,6 +9,7 @@ import pandas as pd
 import streamlit as st
 
 from . import auth, charts, config as C, export, images, records, ui
+from .storage import get_store
 
 
 # ---------------------------------------------------------------- photo view
@@ -210,7 +211,8 @@ def render() -> None:
         "Everything the team filed, with photos, totals and a CSV to download.",
         ["👥 {} agents".format(len(auth.load_agents())),
          "🗄️ {} records kept".format(len(entries_all)),
-         "🗓️ {}-day window".format(C.RETENTION_DAYS)],
+         "🗓️ {}-day window".format(C.RETENTION_DAYS),
+         "💾 {}".format(get_store().name)],
     )
     ui.spacer(16)
 
