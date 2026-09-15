@@ -91,6 +91,16 @@ stored = get_store().get_config("agentpins")
 assert "4821" not in str(stored), "the configured PIN is readable in the database"
 print("OK  AGENT_PINS sets each PIN, and only its hash is ever stored")
 
+# --- 4b. the admin field must fit a real passphrase -----------------------
+# A hashed secret is only useful if it can actually be typed into the box.
+at = run("admin login box", login_mode="Admin")
+field = at.text_input(key="pin_admin")
+assert field.proto.max_chars >= 32, (
+    "the admin field caps at %d characters - a passphrase would not fit"
+    % field.proto.max_chars)
+print("OK  the admin field accepts %d characters, so a passphrase fits"
+      % field.proto.max_chars)
+
 # --- 5. a deploy that first ran with an empty roster recovers -------------
 # The seed runs once. If it ran when nothing was configured, the stored roster
 # is [] and the names added to config.py later would never appear.

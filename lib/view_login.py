@@ -76,7 +76,9 @@ def _login_admin() -> None:
         return
 
     pin = st.text_input(
-        "Admin PIN", type="password", max_chars=10, placeholder="• • • • •", key="pin_admin"
+        "Admin PIN or passphrase", type="password", max_chars=64,
+        placeholder="• • • • •", key="pin_admin",
+        help="Letters make this far stronger than extra digits."
     )
     if st.button("Open dashboard", type="primary", width="stretch", key="go_admin"):
         if auth.check_admin(pin):
