@@ -91,5 +91,17 @@ stored = get_store().get_config("agentpins")
 assert "4821" not in str(stored), "the configured PIN is readable in the database"
 print("OK  AGENT_PINS sets each PIN, and only its hash is ever stored")
 
+# --- 5. a deploy that first ran with an empty roster recovers -------------
+# The seed runs once. If it ran when nothing was configured, the stored roster
+# is [] and the names added to config.py later would never appear.
+get_store().set_config("roster", [])
+recovered = auth.load_agents()
+assert recovered == C.DEFAULT_AGENTS, recovered
+print("OK  an empty stored roster re-seeds from config:", len(recovered), "agents")
+
+get_store().set_config("roster", ["Asha", "Ravi"])
+assert auth.load_agents() == ["Asha", "Ravi"], "a real roster was overwritten"
+print("OK  a roster that has people in it is left alone")
+
 print()
 print("*** FRESH-DEPLOY PATH VERIFIED ***")

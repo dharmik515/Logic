@@ -35,8 +35,14 @@ def load_agents() -> List[str]:
     """
     store = get_store()
     roster = store.get_config(ROSTER_KEY)
-    if isinstance(roster, list):
+    if isinstance(roster, list) and roster:
         return [str(a) for a in roster]
+
+    # An *empty* stored roster counts as "never seeded", not as a deliberate
+    # empty team. Otherwise a deployment that first started with no roster
+    # configured would stay empty forever, and the names added to config.py
+    # afterwards would never appear. Removing everybody by hand and wanting it
+    # to stick is not a real use case; getting your team back is.
     seed = C.default_agents()
     store.set_config(ROSTER_KEY, seed)
     return list(seed)
