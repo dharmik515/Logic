@@ -60,6 +60,16 @@ def _login_agent() -> None:
 
 def _login_admin() -> None:
     st.markdown("###### 🛡️ Admin access")
+
+    if not C.admin_configured():
+        ui.note(
+            "Admin access is not set up yet. Add ADMIN_PIN to this app's secrets "
+            "(Streamlit Cloud: Manage app → Settings → Secrets) and reboot. "
+            "There is deliberately no built-in PIN - the source is public.",
+            "warn",
+        )
+        return
+
     pin = st.text_input(
         "Admin PIN", type="password", max_chars=10, placeholder="• • • • •", key="pin_admin"
     )

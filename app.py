@@ -63,18 +63,6 @@ def topbar() -> None:
             logout()
 
 
-def pin_warning() -> None:
-    """The source is public, so the built-in PIN protects nothing."""
-    if not C.using_default_admin_pin():
-        return
-    st.error(
-        "**This dashboard is still using the default admin PIN.** It is written "
-        "in this app's public source code, so anyone who finds the link can open "
-        "it. Set `ADMIN_PIN` in the app's secrets and reboot.",
-        icon="🔓",
-    )
-
-
 def storage_warning() -> None:
     """Loud, once, for the admin: SQLite on a cloud host is not durable."""
     store = get_store()
@@ -99,7 +87,6 @@ def main() -> None:
         view_agent.render()
     elif role == "admin":
         topbar()
-        pin_warning()
         storage_warning()
         view_admin.render()
     else:

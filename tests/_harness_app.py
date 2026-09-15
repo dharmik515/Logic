@@ -15,7 +15,7 @@ sys.path.insert(0, os.getcwd())
 role = os.environ.get("SHOT_ROLE", "")
 if role == "admin":
     st.session_state.setdefault("role", "admin")
-    st.session_state.setdefault("admin_pin", os.environ.get("SHOT_ADMIN_PIN", "24668"))
+    st.session_state.setdefault("admin_pin", os.environ.get("ADMIN_PIN", "246810"))
 elif role == "agent":
     st.session_state.setdefault("role", "agent")
     st.session_state.setdefault("agent", os.environ.get("SHOT_AGENT", "Alpha"))

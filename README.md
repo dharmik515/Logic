@@ -17,14 +17,14 @@ streamlit run app.py
 
 Then open http://localhost:8501.
 
-A fresh install has **no team and no data**. Log in on the **Admin** tab (the
-built-in PIN is in `lib/config.py` — change it before anyone else uses this),
-then add your agents under *Team, PINs & reset requests*. They can log in as
-soon as you add them.
+**There is no PIN anywhere in this repository.** The source is public, so a PIN
+in it would be a published password. Until you set `ADMIN_PIN` in secrets the
+dashboard cannot be opened by anyone, and agents who have not been given a PIN
+get a random one that only the admin can see.
 
-> **This repository contains no real names.** The roster lives in configuration
-> and in the app's own storage, never in the source — see
-> [Configuration](#configuration). Please keep it that way if you fork it.
+Copy `.streamlit/secrets.toml.example` to `.streamlit/secrets.toml`, set
+`ADMIN_PIN`, and you are running. The roster is in
+[`lib/config.py`](lib/config.py); PINs are in secrets, never here.
 
 ---
 
@@ -127,16 +127,19 @@ create table config (key text primary key, payload jsonb not null);
 ```
 </details>
 
-### 2. Change the admin PIN
+### 2. Set the PINs — in secrets, never in the repo
 
-This is the important one. The source is public, so the built-in fallback PIN is
-public too — anyone who finds your app's link can open the dashboard until you
-set your own. **The dashboard shows a red banner until you do.** Set `ADMIN_PIN`
-in the app's secrets and reboot.
+`ADMIN_PIN` is required: there is no fallback in the source, so the dashboard
+refuses every login until you set one. `AGENT_PINS` gives each agent their own
+(`"Sultan:1111, Ifham:2222"`); anyone you leave out gets a random 6-digit PIN
+that the admin can read off the Team panel and pass on.
+
+Never commit these. `.gitignore` already excludes `.streamlit/secrets.toml`.
 
 ### 3. Check the roster
 
-The team is managed from the dashboard: **Team, PINs & reset requests** →
+The starting team is the list in [`lib/config.py`](lib/config.py) — names only,
+no PINs. After first run the team is managed from the dashboard: **Team, PINs & reset requests** →
 **Add an agent** (name + starting PIN), or **Remove** next to anyone who has
 left. Removing takes a second confirming click, revokes their login and clears
 their PIN - but **their reports from the last 30 days are deliberately kept**,
@@ -200,10 +203,11 @@ built-in default**, so nothing has to be edited in code.
 
 | Key | Purpose | Default |
 |---|---|---|
-| `ADMIN_PIN` | Admin dashboard PIN — **set this** | a public default |
-| `AGENT_PIN` | Starting PIN for an agent who does not have one | a public default |
-| `AGENTS` | Seed roster, comma separated, e.g. `"Asha, Ravi"` | empty |
-| `QUICK_REMARKS` | Quick-pick labels on differential rows | empty |
+| `ADMIN_PIN` | Admin dashboard PIN — **required**, nothing works without it | none |
+| `AGENT_PINS` | Per-agent PINs: `"Sultan:1111, Ifham:2222"` | none |
+| `AGENT_PIN` | One shared starting PIN instead of the above | none → random per agent |
+| `AGENTS` | Override the roster, comma separated | the list in `lib/config.py` |
+| `QUICK_REMARKS` | Override the differential quick-picks | `Samsung, Amazon` |
 | `APP_TIMEZONE` | Decides when "today" rolls over | `Asia/Kolkata` |
 | `DATABASE_URL` | Postgres connection string — **the recommended storage** | unset (SQLite) |
 | `SUPABASE_URL` / `SUPABASE_KEY` | Supabase over REST, as an alternative | unset |

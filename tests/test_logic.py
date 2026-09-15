@@ -1,4 +1,6 @@
 import os, sys, io, base64
+os.environ.setdefault("ADMIN_PIN", "246810")
+os.environ.setdefault("AGENT_PIN", "123456")
 os.environ.setdefault("AGENTS", "Alpha, Bravo, Charlie, Delta, Echo, Foxtrot, Golf, Hotel, India, Juliet, Kilo")
 os.environ.setdefault("QUICK_REMARKS", "Client A, Client B")
 os.environ["SQLITE_PATH"] = "data/smoke.db"

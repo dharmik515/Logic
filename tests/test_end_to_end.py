@@ -11,6 +11,8 @@ photo is placed in the session slot the widget would have filled
 """
 import os, sys, io
 
+os.environ.setdefault("ADMIN_PIN", "246810")
+os.environ.setdefault("AGENT_PIN", "123456")
 os.environ.setdefault("AGENTS", "Alpha, Bravo, Charlie, Delta, Echo, Foxtrot, Golf, Hotel, India, Juliet, Kilo")
 os.environ.setdefault("QUICK_REMARKS", "Client A, Client B")
 os.environ["SQLITE_PATH"] = "data/e2e.db"

@@ -37,40 +37,54 @@ def run(label, **state):
 md = lambda at: " ".join(m.value for m in at.markdown)
 errs = lambda at: " ".join(e.value for e in at.error)
 
-# --- 1. nothing configured, nothing stored --------------------------------
-assert auth.load_agents() == [], "a fresh install must not ship anybody's name"
-assert C.quick_remarks() == [], "a fresh install must not ship client names"
-print("OK  fresh install: roster empty, no client names, no data")
+# --- 1. the roster ships, but not a single PIN ----------------------------
+roster = auth.load_agents()
+assert roster == C.DEFAULT_AGENTS and len(roster) == 11, roster
+print("OK  roster seeds from source:", len(roster), "agents")
 
-at = run("login screen with an empty team")
-assert "No agents have been added yet" in md(at), md(at)
-assert not any(b.label == "Log in" for b in at.button), "login offered with no agents"
+pins = auth.load_pins()
+assert all(p.isdigit() and len(p) == 6 for p in pins.values()), pins
+assert len(set(pins.values())) == len(pins), "agents share a PIN"
+assert "12345" not in pins.values(), "a PIN from the source file was used"
+print("OK  with no AGENT_PIN set, every agent gets their own random 6-digit PIN")
 
-at = run("forgot-PIN screen with an empty team", forgot=True)
-assert "No agents have been added yet" in md(at)
+at = run("login screen lists the team")
+names = [getattr(o, "content", o) for o in at.get("button_group")[1].options]
+assert names == roster, names
 
-# --- 2. the admin can still get in and build the team ---------------------
-at = run("admin dashboard", role="admin", admin_pin=C.admin_pin())
-assert "default admin PIN" in errs(at), "the default-PIN warning is missing"
-print("OK  admin warned that the published default PIN is still in force")
+# --- 2. with no ADMIN_PIN set, nothing opens the dashboard ----------------
+assert C.admin_pin() is None, "a PIN is baked into the source somewhere"
+assert not C.admin_configured()
+for attempt in ("", "24668", "12345", "0000", "admin", None):
+    assert not auth.check_admin(attempt), "admin login accepted %r with no PIN set" % attempt
+print("OK  no ADMIN_PIN configured -> every admin login is refused, including blank")
+
+at = run("admin tab explains what to configure", login_mode="Admin")
+assert "Admin access is not set up yet" in md(at), md(at)
+assert not any(b.label == "Open dashboard" for b in at.button),     "a login button is offered when admin access cannot work"
+print("OK  the admin tab says what to set instead of offering a dead PIN box")
+
+# --- 3. once configured, it opens - and only with that PIN ----------------
+os.environ["ADMIN_PIN"] = "918273"
+assert C.admin_configured() and auth.check_admin("918273")
+assert not auth.check_admin("24668"), "the old published PIN still works"
+print("OK  once ADMIN_PIN is set it opens with that PIN and nothing else")
+
+at = run("admin dashboard", role="admin", admin_pin="918273")
 
 ok, msg = auth.add_agent("Asha", "4321"); assert ok, msg
-ok, msg = auth.add_agent("Ravi", "4322"); assert ok, msg
-assert auth.load_agents() == ["Asha", "Ravi"]
-print("OK  admin built the team from scratch:", auth.load_agents())
-
-at = run("login screen once the team exists")
-names = [getattr(o, "content", o) for o in at.get("button_group")[1].options]
-assert names == ["Asha", "Ravi"], names
+assert "Asha" in auth.load_agents()
 assert auth.check_agent("Asha", "4321")
-print("OK  the new agents can log in")
+print("OK  admin can add someone, and they can log in straight away")
 
-# --- 3. the warning clears once a real PIN is set -------------------------
-os.environ["ADMIN_PIN"] = "918273"
-assert not C.using_default_admin_pin()
-at = run("admin dashboard with a configured PIN", role="admin", admin_pin="918273")
-assert "default admin PIN" not in errs(at)
-print("OK  warning clears once ADMIN_PIN is configured")
+# --- 4. PINs can be supplied per agent, from secrets only -----------------
+os.environ["AGENT_PINS"] = "Nila:4821, Omar:7390"
+from lib.storage import get_store
+get_store().set_config("roster", ["Nila", "Omar"])
+get_store().set_config("agentpins", {})
+pins = auth.load_pins()
+assert pins["Nila"] == "4821" and pins["Omar"] == "7390", pins
+print("OK  AGENT_PINS assigns PINs per agent without putting one in the repo")
 
 print()
 print("*** FRESH-DEPLOY PATH VERIFIED ***")

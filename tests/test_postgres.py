@@ -21,6 +21,8 @@ if not DSN:
     print("SKIPPED - set DATABASE_URL to a Postgres server to run this suite")
     raise SystemExit(0)
 
+os.environ.setdefault("ADMIN_PIN", "246810")
+os.environ.setdefault("AGENT_PIN", "123456")
 os.environ.setdefault("AGENTS", "Alpha, Bravo")
 
 from PIL import Image

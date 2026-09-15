@@ -100,9 +100,13 @@ def load_pins() -> Dict[str, str]:
         pins = {}
     changed = False
     default = C.default_agent_pin()
+    per_agent = C.agent_pins()          # AGENT_PINS = "Sultan:4821, Ifham:7390"
     for a in load_agents():
         if not pins.get(a):
-            pins[a] = default
+            # Order: the PIN set for this agent in secrets, then a shared
+            # AGENT_PIN, then a random one. Never a value from this source
+            # file - the repository is public, so a PIN in it is published.
+            pins[a] = per_agent.get(a) or default or C.random_pin()
             changed = True
     if changed:
         store.set_config(PINS_KEY, pins)
@@ -120,7 +124,15 @@ def save_requests(reqs: Dict[str, Dict[str, Any]]) -> None:
 
 # ------------------------------------------------------------------- login --
 def check_admin(pin: str) -> bool:
-    return str(pin or "").strip() == str(C.admin_pin())
+    """Fail closed: with no ADMIN_PIN configured, nothing opens the dashboard.
+
+    Note the `configured is None` guard - without it an unset PIN would compare
+    equal to an empty submission and let anyone straight in.
+    """
+    configured = C.admin_pin()
+    if configured is None:
+        return False
+    return str(pin or "").strip() == str(configured)
 
 
 def check_agent(agent: str, pin: str) -> bool:

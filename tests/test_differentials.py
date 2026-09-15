@@ -1,5 +1,7 @@
 """Reproduce the reported crash, then prove the fix + the new Deal ID field."""
 import os, sys
+os.environ.setdefault("ADMIN_PIN", "246810")
+os.environ.setdefault("AGENT_PIN", "123456")
 os.environ.setdefault("AGENTS", "Alpha, Bravo, Charlie, Delta, Echo, Foxtrot, Golf, Hotel, India, Juliet, Kilo")
 os.environ.setdefault("QUICK_REMARKS", "Client A, Client B")
 os.environ["SQLITE_PATH"] = "data/regress.db"

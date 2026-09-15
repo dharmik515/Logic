@@ -29,16 +29,41 @@ def _csv_secret(key, fallback=()):
     return [str(n).strip() for n in names if str(n).strip()]
 
 
+DEFAULT_AGENTS = [
+    "Sultan", "Ifham", "Athar", "Neshar", "Aslam", "Ali",
+    "Mirza", "Mudassir", "Abdulla", "Thalla", "Ibrahim",
+]
+
+DEFAULT_QUICK_REMARKS = ["Samsung", "Amazon"]
+
+
 def default_agents():
-    """Seed roster from configuration. Empty unless AGENTS is set."""
-    return _csv_secret("AGENTS")
+    """Seed roster. Override per-deployment with AGENTS = "Asha, Ravi"."""
+    return _csv_secret("AGENTS", DEFAULT_AGENTS)
 
 
 def quick_remarks():
-    """Optional quick-pick labels on the differential rows, e.g. your regular
-    clients. Configure with QUICK_REMARKS = "Acme, Globex"; empty by default so
-    no commercial relationship is disclosed by this repository."""
-    return _csv_secret("QUICK_REMARKS")
+    """Quick-pick labels on the differential rows. Override with
+    QUICK_REMARKS = "Acme, Globex"."""
+    return _csv_secret("QUICK_REMARKS", DEFAULT_QUICK_REMARKS)
+
+
+def agent_pins():
+    """Per-agent starting PINs, supplied as a secret and never written here:
+
+        AGENT_PINS = "Sultan:4821, Ifham:7390"
+
+    Anything not listed gets a random PIN the admin can read off the Team
+    panel. No PIN belongs in this file - the repository is public.
+    """
+    out = {}
+    for pair in _csv_secret("AGENT_PINS"):
+        if ":" in pair:
+            name, _, pin = pair.partition(":")
+            name, pin = name.strip(), pin.strip()
+            if name and pin:
+                out[name] = pin
+    return out
 
 APP_TITLE = "Daily Agent Report"
 APP_ICON = "🚗"
@@ -65,22 +90,36 @@ def _secret(key: str, default=None):
     return os.environ.get(key, default)
 
 
-DEFAULT_ADMIN_PIN = "24668"
-DEFAULT_AGENT_PIN = "12345"
+# No PIN is written in this file. A password committed to a public repository
+# is not a password - so there is no fallback, and the app fails closed: until
+# ADMIN_PIN is configured, the dashboard simply cannot be opened by anyone.
+def admin_pin():
+    """The configured admin PIN, or None when nobody has set one."""
+    pin = _secret("ADMIN_PIN", None)
+    pin = str(pin).strip() if pin is not None else ""
+    return pin or None
 
 
-def admin_pin() -> str:
-    return str(_secret("ADMIN_PIN", DEFAULT_ADMIN_PIN))
+def admin_configured() -> bool:
+    return admin_pin() is not None
 
 
-def using_default_admin_pin() -> bool:
-    """True while the dashboard is still protected by the PIN published in this
-    (public) source. Surfaced loudly in the admin view."""
-    return str(admin_pin()) == DEFAULT_ADMIN_PIN
+def default_agent_pin():
+    """Starting PIN for an agent seeded from AGENTS.
+
+    None means "make one up per agent" - see auth.load_pins(). Again, no
+    shipped default, because a published starting PIN is a published password.
+    """
+    pin = _secret("AGENT_PIN", None)
+    pin = str(pin).strip() if pin is not None else ""
+    return pin or None
 
 
-def default_agent_pin() -> str:
-    return str(_secret("AGENT_PIN", DEFAULT_AGENT_PIN))
+def random_pin() -> str:
+    """A 6-digit PIN the admin can read off the Team panel and pass on."""
+    import secrets
+
+    return "".join(secrets.choice("0123456789") for _ in range(6))
 
 
 def timezone_name() -> str:
